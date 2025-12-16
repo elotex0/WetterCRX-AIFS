@@ -14,7 +14,7 @@ os.makedirs(output_dir, exist_ok=True)
 
 # ECMWF Open Data Client (AWS Mirror empfohlen)
 client = Client(
-    source="aws"
+    source="aws",
     model="aifs-single"
 )
 
