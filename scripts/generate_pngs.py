@@ -342,10 +342,10 @@ for filename in sorted(os.listdir(data_dir)):
         data = ds["msl"].values / 100
         data[data < 0] = np.nan
     elif var_type == "geo_eu":
-        if "gh" not in ds:
+        if "z" not in ds:
             print(f"Keine geopot-Variable in {filename} ds.keys(): {list(ds.keys())}")
             continue
-        data = ds["gh"].values
+        data = ds["z"].values
         data[data < 0] = np.nan
     else:
         print(f"Unbekannter var_type {var_type}")
