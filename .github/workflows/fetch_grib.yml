@@ -1,0 +1,167 @@
+name: Fetch ECMWF GRIB2 and Generate PNGs
+
+on:
+  workflow_dispatch:
+
+jobs:
+  fetch_and_generate:
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.set_run_date.outputs.run }}
+
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.ECMWF_PAT }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+
+      - name: Cache Python packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+      
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Set RUN and DATE
+        id: set_run_date
+        run: |
+          HOUR=$(date -u +%H)
+          case $HOUR in
+            07|08|09) RUN=00 ;;
+            13|14|15) RUN=06 ;;
+            19|20|21) RUN=12 ;;
+            01|02|03) RUN=18 ;;
+          esac
+          DATE=$(date -u +%Y%m%d)
+          # set env variables
+          echo "RUN=$RUN" >> $GITHUB_ENV
+          echo "DATE=$DATE" >> $GITHUB_ENV
+          # set step output for job output
+          echo "run=$RUN" >> $GITHUB_OUTPUT
+
+      - name: Download Grib2
+        run: |
+          python downloads/2t.py &
+          python downloads/msl.py &
+          python downloads/geo.py &
+          python downloads/tp_acc.py &
+          
+      - name: Upload GRIB2 as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: grib2
+          path: data/
+
+      - name: Delete GRIB2 files (local cleanup)
+        run: rm -rf data/
+
+
+  generate_pngs:
+    runs-on: ubuntu-latest
+    needs: fetch_and_generate
+    strategy:
+      matrix:
+        variable: [t2m, pmsl_eu, pmsl, geo_eu, t2m_eu, tp_acc]
+      max-parallel: 6
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Download GRIB2 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: grib2
+          path: data/
+
+      - name: Generate PNGs for ${{ matrix.variable }}
+        run: |
+          mkdir -p aifs/${{ matrix.variable }}
+          input_dir="data/${{ matrix.variable }}"
+          if [ "${{ matrix.variable }}" = "pmsl_eu" ]; then
+            input_dir="data/pmsl"
+          elif [ "${{ matrix.variable }}" = "geo_eu" ]; then
+            input_dir="data/geo"
+          elif [ "${{ matrix.variable }}" = "t2m_eu" ]; then
+            input_dir="data/t2m"
+          fi
+          python scripts/generate_pngs.py \
+            "$input_dir" \
+            aifs/${{ matrix.variable }} \
+            ${{ matrix.variable }}
+
+
+      - name: Upload PNGs artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aifs-${{ matrix.variable }}
+          path: aifs/${{ matrix.variable }}
+
+  deploy_to_r2:
+    runs-on: ubuntu-latest
+    needs: [fetch_and_generate, generate_pngs]
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v3
+
+      - name: Download all PNGs artifact
+        uses: actions/download-artifact@v4
+        with:
+          pattern: aifs-*
+          path: aifs_raw
+
+      - name: Merge PNG folders into one structure
+        run: |
+          mkdir -p ifs/${{ needs.fetch_and_generate.outputs.run }}
+          for d in aifs_raw/*; do
+            if [ -d "$d" ]; then
+              varname=$(basename "$d" | sed 's/^aifs-//')  # entfernt "aifs-" Prefix
+              mkdir -p aifs/${{ needs.fetch_and_generate.outputs.run }}/"$varname"
+              cp -r "$d"/* aifs/${{ needs.fetch_and_generate.outputs.run }}/"$varname"/ || true
+            fi
+          done
+
+      - name: Generate Metadata
+        run: |
+          python scripts/generate_metadata.py aifs/${{ needs.fetch_and_generate.outputs.run }} ${{ needs.fetch_and_generate.outputs.run }} ${{ env.DATE }}
+
+      - name: Clean old runs on R2 except current
+        run: |
+          for run_folder in $(aws s3 ls s3://${{ secrets.R2_BUCKET }}/aifs/ --endpoint-url https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com | awk '{print $2}' | sed 's#/##'); do
+            if [ "$run_folder" != "${{ needs.fetch_and_generate.outputs.run }}/" ]; then
+              aws s3 rm s3://${{ secrets.R2_BUCKET }}/ifs/$run_folder --recursive --endpoint-url https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+            fi
+          done
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+
+      - name: Upload current run and metadata.json to R2
+        run: |
+          # Upload run folder
+          aws s3 sync ./aifs/${{ needs.fetch_and_generate.outputs.run }}/ s3://${{ secrets.R2_BUCKET }}/aifs/${{ needs.fetch_and_generate.outputs.run }}/ \
+            --endpoint-url https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+
+          # Upload metadata.json outside run folder
+          aws s3 cp ./aifs/metadata.json s3://${{ secrets.R2_BUCKET }}/aifs/metadata.json \
+            --endpoint-url https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
