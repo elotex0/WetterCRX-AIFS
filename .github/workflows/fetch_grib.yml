@@ -48,7 +48,7 @@ jobs:
           python downloads/2t.py &
           python downloads/msl.py &
           python downloads/geo.py &
-          python downloads/tp_acc.py &
+          wait
           
       - name: Upload GRIB2 as artifact
         uses: actions/upload-artifact@v4
@@ -65,8 +65,8 @@ jobs:
     needs: fetch_and_generate
     strategy:
       matrix:
-        variable: [t2m, pmsl_eu, pmsl, geo_eu, t2m_eu, tp_acc]
-      max-parallel: 6
+        variable: [t2m, pmsl_eu, pmsl, geo_eu, t2m_eu]
+      max-parallel: 5
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v3
@@ -123,7 +123,7 @@ jobs:
 
       - name: Merge PNG folders into one structure
         run: |
-          mkdir -p ifs/${{ needs.fetch_and_generate.outputs.run }}
+          mkdir -p aifs/${{ needs.fetch_and_generate.outputs.run }}
           for d in aifs_raw/*; do
             if [ -d "$d" ]; then
               varname=$(basename "$d" | sed 's/^aifs-//')  # entfernt "aifs-" Prefix
@@ -140,7 +140,7 @@ jobs:
         run: |
           for run_folder in $(aws s3 ls s3://${{ secrets.R2_BUCKET }}/aifs/ --endpoint-url https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com | awk '{print $2}' | sed 's#/##'); do
             if [ "$run_folder" != "${{ needs.fetch_and_generate.outputs.run }}/" ]; then
-              aws s3 rm s3://${{ secrets.R2_BUCKET }}/ifs/$run_folder --recursive --endpoint-url https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+              aws s3 rm s3://${{ secrets.R2_BUCKET }}/aifs/$run_folder --recursive --endpoint-url https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
             fi
           done
         env:
