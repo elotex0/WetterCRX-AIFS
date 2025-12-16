@@ -345,7 +345,7 @@ for filename in sorted(os.listdir(data_dir)):
         if "z" not in ds:
             print(f"Keine geopot-Variable in {filename} ds.keys(): {list(ds.keys())}")
             continue
-        data = ds["z"].values
+        data = ds["z"].values / 9.81
         data[data < 0] = np.nan
     else:
         print(f"Unbekannter var_type {var_type}")
