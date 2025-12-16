@@ -32,7 +32,7 @@ for step in steps:
             type="fc",
             step=step,
             param="z",
-            levellist="500",
+            levelist="500",
             target=target_path
         )
     except Exception as e:
