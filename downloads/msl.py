@@ -13,7 +13,10 @@ output_dir = "data/pmsl"  # in msl.py oder ptype.py anpassen
 os.makedirs(output_dir, exist_ok=True)
 
 # ECMWF Open Data Client (AWS Mirror empfohlen)
-client = Client(source="aws")
+client = Client(
+    source="aws"
+    model="aifs-single"
+)
 
 # Step-Bereiche gemäß ECMWF-HRES-Definition
 steps = list(range(0, 361, 6))
