@@ -64,7 +64,6 @@ jobs:
           echo "Lade von: $BASE_URL"
 
           curl -fSL "${BASE_URL}/temperature_2m.om" -o "data/t2m/temperature_2m.om"
-          curl -fSL "${BASE_URL}/wind_gusts_10m.om" -o "data/wind/wind_gusts_10m.om"
           curl -fSL "${BASE_URL}/precipitation.om"  -o "data/tp/precipitation.om"
 
           
@@ -83,8 +82,8 @@ jobs:
     needs: fetch_and_generate
     strategy:
       matrix:
-        variable: [t2m, tp, wind]
-      max-parallel: 3
+        variable: [t2m, tp]
+      max-parallel: 2
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v3
