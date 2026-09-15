@@ -11,18 +11,18 @@ jobs:
 
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
         with:
           token: ${{ secrets.AIFS_PAT }}
 
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
 
 
       - name: Cache Python packages
-        uses: actions/cache@v3
+        uses: actions/cache@v6
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
@@ -68,7 +68,7 @@ jobs:
 
           
       - name: Upload GRIB2 as artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: om-file
           path: data/
@@ -86,10 +86,10 @@ jobs:
       max-parallel: 2
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
 
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
 
@@ -97,7 +97,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Download GRIB2 artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: om-file
           path: data/
@@ -113,7 +113,7 @@ jobs:
 
 
       - name: Upload PNGs artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: aifs-${{ matrix.variable }}
           path: aifs/${{ matrix.variable }}
@@ -123,10 +123,10 @@ jobs:
     needs: [fetch_and_generate, generate_pngs]
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
 
       - name: Download all PNGs artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: aifs-*
           path: aifs_raw
